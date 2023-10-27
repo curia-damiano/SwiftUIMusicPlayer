@@ -1,0 +1,9 @@
+# By default, SwiftLint uses a set of sensible default rules you can adjust:
+# Rule Directory Reference: https://realm.github.io/SwiftLint/rule-directory.html
+disabled_rules: # rule identifiers turned on by default to exclude from running
+  - identifier_name						# to allow "vm"
+  - inclusive_language					# to allow "master"
+  - line_length							# to allow lines with comments
+  - redundant_optional_initialization	# to clarify code
+  - type_body_length					# to allow complex viewModels
+  - vertical_parameter_alignment		# because of bug https://github.com/realm/SwiftLint/issues/1573
