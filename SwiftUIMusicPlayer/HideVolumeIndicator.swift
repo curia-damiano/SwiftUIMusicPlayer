@@ -2,12 +2,13 @@
 //  HideVolumeIndicator.swift
 //  SwiftUIMusicPlayer
 //
-//  Created by Damiano Curia on 16.01.23.
+//  Created by Damiano Curia on 09.10.2024.
 //
 
 import SwiftUI
 import MediaPlayer
 
+#if os(iOS) || os(visionOS)
 struct HideVolumeIndicator: UIViewRepresentable {
 	func makeUIView(context: Context) -> MPVolumeView {
 		let result = MPVolumeView(frame: .zero)
@@ -19,8 +20,8 @@ struct HideVolumeIndicator: UIViewRepresentable {
 	}
 }
 
-struct HideVolumeIndicator_Previews: PreviewProvider {
-	static var previews: some View {
-		HideVolumeIndicator()
-	}
+#Preview {
+    HideVolumeIndicator()
 }
+#else // if os(macOS)
+#endif

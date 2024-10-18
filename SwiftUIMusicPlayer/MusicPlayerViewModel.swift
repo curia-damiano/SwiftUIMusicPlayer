@@ -2,7 +2,7 @@
 //  MusicPlayerViewModel.swift
 //  SwiftUIMusicPlayer
 //
-//  Created by Damiano Curia on 12.08.22.
+//  Created by Damiano Curia on 09.10.2024.
 //
 
 import Foundation
@@ -21,25 +21,37 @@ class MusicPlayerViewModel: NSObject, ObservableObject {
 
 	private(set) var songs: [String]
 
+#if os(iOS) || os(visionOS)
 	private let audioSession = AVAudioSession.sharedInstance()
+#else // if os(macOS)
+#endif
 	@Published private var indexCurrentSong = 0
 	@Published private var player: AVAudioPlayer!
+#if os(iOS) || os(visionOS)
 	private var masterVolumeSlider: UISlider!
+#else // if os(macOS)
+#endif
 	private var notificationCenter = NotificationCenter.default
 
 	init(_ songs: [String]) {
 		self.songs = songs
 		super.init()
 
+#if os(iOS) || os(visionOS)
 		let masterVolumeView = MPVolumeView()
 		masterVolumeSlider = masterVolumeView.subviews.compactMap({ $0 as? UISlider }).first
+#else // if os(macOS)
+#endif
 
 		setupRemoteTransportControls()
 	}
 
-	func onAppear() {
+	func onAppear() async {
 		do {
+#if os(iOS) || os(visionOS)
 			try audioSession.setCategory(.playback)
+#else // if os(macOS)
+#endif
 		} catch {
 			print("Setting category to AVAudioSessionCategoryPlayback failed.")
 		}
@@ -50,7 +62,7 @@ class MusicPlayerViewModel: NSObject, ObservableObject {
 // swiftlint:enable force_try
 		self.player.delegate = self
 		// self.player.prepareToPlay() // Removed because it stops other audio playing from other apps
-		self.getArtworkAndTitle()
+		await self.getArtworkAndTitle()
 		Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { (_) in
 			Task.detached(priority: .background) {
 				await MainActor.run {
@@ -61,6 +73,7 @@ class MusicPlayerViewModel: NSObject, ObservableObject {
 			}
 		}
 
+#if os(iOS) || os(visionOS)
 		let masterVolumeView = MPVolumeView()
 		masterVolumeSlider = masterVolumeView.subviews.compactMap({ $0 as? UISlider }).first
 		self.percentVolume = CGFloat(audioSession.outputVolume)
@@ -77,11 +90,16 @@ class MusicPlayerViewModel: NSObject, ObservableObject {
 									   selector: #selector(audioSessionRouteChanged),
 									   name: AVAudioSession.routeChangeNotification,
 									   object: audioSession)
+#else // if os(macOS)
+#endif
 	}
 
 	func onDisappear() {
 		notificationCenter.removeObserver(self, name: Notification.Name("SystemVolumeDidChange"), object: nil)
+#if os(iOS) || os(visionOS)
 		notificationCenter.removeObserver(self, name: AVAudioSession.routeChangeNotification, object: audioSession)
+#else // if os(macOS)
+#endif
 	}
 
 	var playerCurrentTime: Double {
@@ -130,16 +148,16 @@ class MusicPlayerViewModel: NSObject, ObservableObject {
 		self.playerCurrentTime = min(self.playerDuration, self.playerCurrentTime + 30)
 	}
 
-	func decrementSong() {
+	func decrementSong() async {
 		if self.indexCurrentSong > 0 {
 			self.indexCurrentSong -= 1
-			self.changeCurrentSong()
+			await self.changeCurrentSong()
 		}
 	}
-	func incrementSong() {
+	func incrementSong() async {
 		if self.indexCurrentSong != self.songs.count - 1 {
 			self.indexCurrentSong += 1
-			self.changeCurrentSong()
+			await self.changeCurrentSong()
 		}
 	}
 
@@ -155,7 +173,10 @@ class MusicPlayerViewModel: NSObject, ObservableObject {
 			}
 
 			do {
+#if os(iOS) || os(visionOS)
 				try audioSession.setActive(true)
+#else // if os(macOS)
+#endif
 			} catch {
 				print("error")
 			}
@@ -166,30 +187,35 @@ class MusicPlayerViewModel: NSObject, ObservableObject {
 		}
 	}
 
-	private func getArtworkAndTitle() {
+	private func getArtworkAndTitle() async {
 		self.data = .init(count: 0)
 		self.title = "???"
 
 		let asset = AVAsset(url: self.player.url!)
 
-		for i in asset.commonMetadata {
-			if i.commonKey?.rawValue == "artwork" {
-				if let iValue = i.value as? Data {
-					let data = iValue
-					self.data = data
+		do {
+			let metadata = try await asset.load(.commonMetadata)
+
+			for i in metadata {
+				if i.commonKey?.rawValue == "artwork" {
+					if let data = try? await i.load(.value) as? Data {
+						self.data = data
+					}
+				}
+				if i.commonKey?.rawValue == "title" {
+					if let title = try? await i.load(.value) as? String {
+						self.title = title
+					}
 				}
 			}
-			if i.commonKey?.rawValue == "title" {
-				if let iValue = i.value as? String {
-					let title = iValue
-					self.title = title
-				}
-			}
+		} catch {
+			print("Failed to load metadata: \(error.localizedDescription)")
 		}
 
 		self.updateNowPlaying()
 	}
 
+#if os(iOS) || os(visionOS)
 	public var audioVolume: Double {
 		get {
 			return Double(masterVolumeSlider.value)
@@ -219,20 +245,25 @@ class MusicPlayerViewModel: NSObject, ObservableObject {
 	func decreaseVolume() {
 		self.audioVolume = max(self.audioVolume - 0.1, 0)
 	}
+#else // if os(macOS)
+#endif
 
-	private func changeCurrentSong() {
+	private func changeCurrentSong() async {
 		let url = Bundle.main.path(forResource: self.songs[self.indexCurrentSong], ofType: "mp3")
 // swiftlint:disable force_try
 		self.player = try! AVAudioPlayer(contentsOf: URL(fileURLWithPath: url!))
 // swiftlint:enable force_try
 		self.player.delegate = self
 		// self.player.prepareToPlay() // Removed because it stops other audio playing from other apps
-		self.getArtworkAndTitle()
+		await self.getArtworkAndTitle()
 		self.percentProgress = 0
 
 		if self.isPlaying {
 			do {
+#if os(iOS) || os(visionOS)
 				try audioSession.setActive(true)
+#else // if os(macOS)
+#endif
 			} catch {
 				print("error")
 			}
@@ -293,10 +324,13 @@ class MusicPlayerViewModel: NSObject, ObservableObject {
 		nowPlayingInfo[MPMediaItemPropertyTitle] = self.title
 		nowPlayingInfo[MPMediaItemPropertyMediaType] = MPMediaType.anyAudio.rawValue
 
+#if os(iOS) || os(visionOS)
 		let image = UIImage(data: self.data)!
 		nowPlayingInfo[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in
 			return image
 		}
+#else // if os(macOS)
+#endif
 
 		nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = self.player.currentTime
 		nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = NSNumber(value: self.player.duration)
@@ -307,6 +341,7 @@ class MusicPlayerViewModel: NSObject, ObservableObject {
 		MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
 	}
 
+#if os(iOS) || os(visionOS)
 	private func updateOutputDevices() {
 		let availableOutputs = audioSession.currentRoute.outputs
 		let firstOutput = availableOutputs.first
@@ -317,15 +352,19 @@ class MusicPlayerViewModel: NSObject, ObservableObject {
 	@objc func audioSessionRouteChanged(notification: Notification) {
 		updateOutputDevices()
 	}
+#else // if os(macOS)
+#endif
 }
 
 extension MusicPlayerViewModel: AVAudioPlayerDelegate {
-	func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-		self.isPlaying = false
-		self.isFinished = true
+	nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+		Task { @MainActor in
+			self.isPlaying = false
+			self.isFinished = true
+		}
 	}
 
-	func audioPlayerBeginInterruption(_ player: AVAudioPlayer) {
-		self.isPlaying = false
+	nonisolated func audioPlayerBeginInterruption(_ player: AVAudioPlayer) {
+		Task { @MainActor in self.isPlaying = false }
 	}
 }

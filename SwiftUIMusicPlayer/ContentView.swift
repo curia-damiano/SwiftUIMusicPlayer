@@ -2,23 +2,22 @@
 //  ContentView.swift
 //  SwiftUIMusicPlayer
 //
-//  Created by Damiano Curia on 12.08.22.
+//  Created by Damiano Curia on 09.10.2024.
 //
 
 import SwiftUI
 
 struct ContentView: View {
 	var body: some View {
-		NavigationView {
+		NavigationStack {
+			Spacer()
+
 			MusicPlayerView(vm: MusicPlayerViewModel(["tagmp3_sample1", "tagmp3_sample2", "tagmp3_sample3", "tagmp3_sample4"]))
-				.navigationTitle("SwiftUI Music Player")
+			Spacer()
 		}
-		.navigationViewStyle(.stack)
 	}
 }
 
-struct ContentView_Previews: PreviewProvider {
-	static var previews: some View {
-		ContentView()
-	}
+#Preview {
+	ContentView()
 }
